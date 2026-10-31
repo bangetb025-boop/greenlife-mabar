@@ -16,7 +16,7 @@ export class Room extends DurableObject {
       if (url.searchParams.get("info") === "1") {
         const lv = this.liveSocks();
         const hg0 = (await this.ctx.storage.get("hg")) || 0;
-        return new Response(JSON.stringify({ v: 5, host: lv.some((w) => w.deserializeAttachment().host), grace: !!(hg0 && Date.now() - hg0 < GRACE), players: lv.map((w) => w.deserializeAttachment().name) }), { headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
+        return new Response(JSON.stringify({ v: 6, host: lv.some((w) => w.deserializeAttachment().host), grace: !!(hg0 && Date.now() - hg0 < GRACE), players: lv.map((w) => w.deserializeAttachment().name) }), { headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
       }
       return new Response("GreenLife Mabar room", { status: 426 });
     }
@@ -49,7 +49,7 @@ export class Room extends DurableObject {
         await this.ctx.storage.delete("hg");
         await this.ctx.storage.deleteAlarm();
         const players = live.filter((w) => !w.deserializeAttachment().host).map((w) => w.deserializeAttachment());
-        server.send(JSON.stringify({ t: "welcome", id: me.id, key, players, v: 5 }));
+        server.send(JSON.stringify({ t: "welcome", id: me.id, key, players, v: 6 }));
         this.broadcast(server, { t: "hostback" });
         this.broadcast(server, { t: "join", id: me.id, name: me.name, host: true });
       }
@@ -58,7 +58,7 @@ export class Room extends DurableObject {
     else {
       const me = { id: crypto.randomUUID().slice(0, 6), name: clean(url.searchParams.get("name")), host: false };
       server.serializeAttachment(me);
-      server.send(JSON.stringify({ t: "welcome", id: me.id, players: live.map((w) => w.deserializeAttachment()), hostAway: !hostSock, v: 5 }));
+      server.send(JSON.stringify({ t: "welcome", id: me.id, players: live.map((w) => w.deserializeAttachment()), hostAway: !hostSock, v: 6 }));
       this.broadcast(server, { t: "join", id: me.id, name: me.name, host: false });
     }
     return new Response(null, { status: 101, webSocket: client });
@@ -90,13 +90,14 @@ export class Room extends DurableObject {
     let d;
     try { d = JSON.parse(msg); } catch (_) { return; }
     if (d.t === "pos" && msg.length <= 400) {
-      this.broadcast(ws, { t: "pos", id: me.id, n: me.name, h: me.host ? 1 : 0, x: num(d.x), y: num(d.y), z: num(d.z), r: num(d.r), m: d.m ? 1 : 0 });
+      this.broadcast(ws, { t: "pos", id: me.id, n: me.name, h: me.host ? 1 : 0, x: num(d.x), y: num(d.y), z: num(d.z), r: num(d.r), m: d.m ? 1 : 0, s: num(d.s), a: typeof d.a === "string" ? d.a.slice(0, 12) : "" });
     } else if (d.t === "plot") {
       if (Array.isArray(d.a) && d.a.length <= 6) this.broadcast(ws, { t: "plot", id: me.id, i: num(d.i) | 0, a: d.a });
-    } else if ((d.t === "world" || d.t === "full") && me.host) {
+    } else if ((d.t === "world" || d.t === "full" || d.t === "npc") && me.host) {
       const out = { t: d.t, id: me.id };
       if (d.w && typeof d.w === "object") out.w = { t: num(d.w.t), rain: d.w.rain ? 1 : 0, rin: num(d.w.rin), day: num(d.w.day) };
       if (Array.isArray(d.p) && d.p.length <= 80) out.p = d.p;
+      if (Array.isArray(d.n) && d.n.length <= 150) out.n = d.n;
       if (typeof d.to === "string") {
         const s = JSON.stringify(out);
         for (const w of this.ctx.getWebSockets()) {
@@ -125,7 +126,7 @@ export class Room extends DurableObject {
 export default {
   async fetch(request, env) {
     const m = new URL(request.url).pathname.match(/^\/room\/([A-Za-z0-9-]{4,12})$/);
-    if (!m) return new Response("GreenLife Mabar OK v5");
+    if (!m) return new Response("GreenLife Mabar OK v6");
     const stub = env.ROOMS.get(env.ROOMS.idFromName(m[1].toUpperCase()));
     return stub.fetch(request);
   },
